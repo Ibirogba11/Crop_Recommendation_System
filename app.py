@@ -9,6 +9,8 @@ app = Flask(__name__)
 base_path = os.path.dirname(os.path.abspath(__file__))
 model = joblib.load(os.path.join(base_path, 'crop_model.pkl'))
 encoder = joblib.load(os.path.join(base_path, 'label_encoder.pkl'))
+# ADD THIS LINE: Load your scaler
+scaler = joblib.load(os.path.join(base_path, 'scaler.pkl')) 
 
 @app.route('/')
 def index():
@@ -17,7 +19,7 @@ def index():
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        # Capture inputs
+        # 1. Capture inputs
         data = [
             float(request.form['N']),
             float(request.form['P']),
@@ -28,8 +30,12 @@ def predict():
             float(request.form['rainfall'])
         ]
 
-        # Predict and Decode
-        prediction_num = model.predict(np.array([data]))
+        # 2. TRANSFORM the data (This is the missing step!)
+        # The model needs the data in the same "scale" it was trained on
+        data_scaled = scaler.transform(np.array([data]))
+
+        # 3. Predict using the SCALED data
+        prediction_num = model.predict(data_scaled)
         crop_name = encoder.inverse_transform(prediction_num)[0]
 
         return jsonify({'prediction': f"{str(crop_name).capitalize()}"})
@@ -38,6 +44,5 @@ def predict():
         return jsonify({'prediction': f"Error: {str(e)}"}), 400
 
 if __name__ == "__main__":
-    # Get port from environment or default to 5000
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
